@@ -40597,6 +40597,112 @@ class InstancedInterleavedBuffer extends InterleavedBuffer {
 
 InstancedInterleavedBuffer.prototype.isInstancedInterleavedBuffer = true;
 
+class Raycaster {
+
+	constructor( origin, direction, near = 0, far = Infinity ) {
+
+		this.ray = new Ray( origin, direction );
+		// direction is assumed to be normalized (for accurate distance calculations)
+
+		this.near = near;
+		this.far = far;
+		this.camera = null;
+		this.layers = new Layers();
+
+		this.params = {
+			Mesh: {},
+			Line: { threshold: 1 },
+			LOD: {},
+			Points: { threshold: 1 },
+			Sprite: {}
+		};
+
+	}
+
+	set( origin, direction ) {
+
+		// direction is assumed to be normalized (for accurate distance calculations)
+
+		this.ray.set( origin, direction );
+
+	}
+
+	setFromCamera( coords, camera ) {
+
+		if ( camera && camera.isPerspectiveCamera ) {
+
+			this.ray.origin.setFromMatrixPosition( camera.matrixWorld );
+			this.ray.direction.set( coords.x, coords.y, 0.5 ).unproject( camera ).sub( this.ray.origin ).normalize();
+			this.camera = camera;
+
+		} else if ( camera && camera.isOrthographicCamera ) {
+
+			this.ray.origin.set( coords.x, coords.y, ( camera.near + camera.far ) / ( camera.near - camera.far ) ).unproject( camera ); // set origin in plane of camera
+			this.ray.direction.set( 0, 0, - 1 ).transformDirection( camera.matrixWorld );
+			this.camera = camera;
+
+		} else {
+
+			console.error( 'THREE.Raycaster: Unsupported camera type: ' + camera.type );
+
+		}
+
+	}
+
+	intersectObject( object, recursive = true, intersects = [] ) {
+
+		intersectObject( object, this, intersects, recursive );
+
+		intersects.sort( ascSort );
+
+		return intersects;
+
+	}
+
+	intersectObjects( objects, recursive = true, intersects = [] ) {
+
+		for ( let i = 0, l = objects.length; i < l; i ++ ) {
+
+			intersectObject( objects[ i ], this, intersects, recursive );
+
+		}
+
+		intersects.sort( ascSort );
+
+		return intersects;
+
+	}
+
+}
+
+function ascSort( a, b ) {
+
+	return a.distance - b.distance;
+
+}
+
+function intersectObject( object, raycaster, intersects, recursive ) {
+
+	if ( object.layers.test( raycaster.layers ) ) {
+
+		object.raycast( raycaster, intersects );
+
+	}
+
+	if ( recursive === true ) {
+
+		const children = object.children;
+
+		for ( let i = 0, l = children.length; i < l; i ++ ) {
+
+			intersectObject( children[ i ], raycaster, intersects, true );
+
+		}
+
+	}
+
+}
+
 /**
  * Ref: https://en.wikipedia.org/wiki/Spherical_coordinate_system
  *
@@ -104231,80 +104337,136 @@ class IFCLoader extends Loader {
 
 }
 
+//Sets up the IFC loading
+const ifcModels = [];
+const ifcLoader = new IFCLoader();
+
+// Sets up optimized picking
+ifcLoader.ifcManager.setupThreeMeshBVH(computeBoundsTree, disposeBoundsTree, acceleratedRaycast);
+
 //Creates the Three.js scene
-  const scene = new Scene();
-  
-  //Object to store the size of the viewport
-  const size = {
-    width: window.innerWidth,
-    height: window.innerHeight,
-  };
-  
-  //Creates the camera (point of view of the user)
-  const camera = new PerspectiveCamera(75, size.width / size.height);
-  camera.position.z = 15;
-  camera.position.y = 13;
-  camera.position.x = 8;
-  
-  //Creates the lights of the scene
-  const lightColor = 0xffffff;
-  
-  const ambientLight = new AmbientLight(lightColor, 0.5);
-  scene.add(ambientLight);
-  
-  const directionalLight = new DirectionalLight(lightColor, 1);
-  directionalLight.position.set(0, 10, 0);
-  directionalLight.target.position.set(-5, 0, 0);
-  scene.add(directionalLight);
-  scene.add(directionalLight.target);
-  
-  //Sets up the renderer, fetching the canvas of the HTML
-  const threeCanvas = document.getElementById("three-canvas");
-  const renderer = new WebGLRenderer({ canvas: threeCanvas, alpha: true });
-  renderer.setSize(size.width, size.height);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  
-  //Creates grids and axes in the scene
-  const grid = new GridHelper(50, 30);
-  scene.add(grid);
-  
-  const axes = new AxesHelper();
-  axes.material.depthTest = false;
-  axes.renderOrder = 1;
-  scene.add(axes);
-  
-  //Creates the orbit controls (to navigate the scene)
-  const controls = new OrbitControls(camera, threeCanvas);
-  controls.enableDamping = true;
-  controls.target.set(-2, 0, 0);
-  
-  //Animation loop
-  const animate = () => {
-    controls.update();
-    renderer.render(scene, camera);
-    requestAnimationFrame(animate);
-  };
-  
-  animate();
-  
-  //Adjust the viewport to the size of the browser
-  window.addEventListener("resize", () => {
-    (size.width = window.innerWidth), (size.height = window.innerHeight);
-    camera.aspect = size.width / size.height;
-    camera.updateProjectionMatrix();
-    renderer.setSize(size.width, size.height);
-  });
+const scene = new Scene();
+
+//Object to store the size of the viewport
+const size = {
+width: window.innerWidth,
+height: window.innerHeight,
+};
+
+//Creates the camera (point of view of the user)
+const camera = new PerspectiveCamera(75, size.width / size.height);
+camera.position.z = 15;
+camera.position.y = 13;
+camera.position.x = 8;
+
+//Creates the lights of the scene
+const lightColor = 0xffffff;
+
+const ambientLight = new AmbientLight(lightColor, 0.5);
+scene.add(ambientLight);
+
+const directionalLight = new DirectionalLight(lightColor, 1);
+directionalLight.position.set(0, 10, 0);
+directionalLight.target.position.set(-5, 0, 0);
+scene.add(directionalLight);
+scene.add(directionalLight.target);
+
+//Sets up the renderer, fetching the canvas of the HTML
+const threeCanvas = document.getElementById("three-canvas");
+const renderer = new WebGLRenderer({ canvas: threeCanvas, alpha: true });
+renderer.setSize(size.width, size.height);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+//Creates grids and axes in the scene
+const grid = new GridHelper(50, 30);
+scene.add(grid);
+
+const axes = new AxesHelper();
+axes.material.depthTest = false;
+axes.renderOrder = 1;
+scene.add(axes);
+
+//Creates the orbit controls (to navigate the scene)
+const controls = new OrbitControls(camera, threeCanvas);
+controls.enableDamping = true;
+controls.target.set(-2, 0, 0);
+
+//Animation loop
+const animate = () => {
+controls.update();
+renderer.render(scene, camera);
+requestAnimationFrame(animate);
+};
+
+animate();
+
+//Adjust the viewport to the size of the browser
+window.addEventListener("resize", () => {
+(size.width = window.innerWidth), (size.height = window.innerHeight);
+camera.aspect = size.width / size.height;
+camera.updateProjectionMatrix();
+renderer.setSize(size.width, size.height);
+});
   
   //Sets up the IFC loading
-  const ifcLoader = new IFCLoader();
+  //const ifcLoader = new IFCLoader();
   //ifcLoader.ifcManager.setWasmPath("../../../");
   
-    const input = document.getElementById("file-input");
-    input.addEventListener(
-      "change",
-      (changed) => {
-        const ifcURL = URL.createObjectURL(changed.target.files[0]);
-        ifcLoader.load(ifcURL, (ifcModel) => scene.add(ifcModel));
-      },
-      false
-    );
+const input = document.getElementById("file-input");
+input.addEventListener(
+    "change",
+    (changed) => {
+    const ifcURL = URL.createObjectURL(changed.target.files[0]);
+    ifcLoader.load(ifcURL, (ifcModel) => {
+        ifcModels.push(ifcModel);
+        scene.add(ifcModel);
+      });
+    },
+    false
+);
+ 
+// async function loadIFC() {
+//   await ifcLoader.ifcManager.setWasmPath("../../");
+//   ifcLoader.load("../../IFC/01.ifc", (ifcModel) => {
+//     ifcModels.push(ifcModel);
+//     scene.add(ifcModel);
+//   });
+// }
+
+const raycaster = new Raycaster();
+raycaster.firstHitOnly = true;
+const mouse = new Vector2$1();
+function cast(event) {
+    // Computes the position of the mouse on the screen
+    const bounds = threeCanvas.getBoundingClientRect();
+  
+    const x1 = event.clientX - bounds.left;
+    const x2 = bounds.right - bounds.left;
+    mouse.x = (x1 / x2) * 2 - 1;
+  
+    const y1 = event.clientY - bounds.top;
+    const y2 = bounds.bottom - bounds.top;
+    mouse.y = -(y1 / y2) * 2 + 1;
+  
+    // Places it on the camera pointing to the mouse
+    raycaster.setFromCamera(mouse, camera);
+  
+    // Casts a ray
+    return raycaster.intersectObjects(ifcModels);
+  }
+
+  async function pick(event) {
+    const found = cast(event)[0];
+    if (found) {
+      const index = found.faceIndex;
+      const geometry = found.object.geometry;
+      const ifc = ifcLoader.ifcManager;
+      const id = ifc.getExpressId(geometry, index);
+      const model = ifcModels[0].modelID;
+      const manager = ifcLoader.ifcManager;
+      const props = await manager.getItemProperties(model,id,false);
+
+      console.log(id, props);
+    }
+  }
+  threeCanvas.ondblclick = pick;
