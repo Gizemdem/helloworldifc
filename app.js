@@ -130,6 +130,8 @@ function cast(event) {
     return raycaster.intersectObjects(ifcModels);
   }
 
+const output = document.getElementById("id-output");
+
   async function pick(event) {
     const found = cast(event)[0];
     if (found) {
@@ -140,7 +142,7 @@ function cast(event) {
       const model = ifcModels[0].modelID;
       const manager = ifcLoader.ifcManager;
       const props = await manager.getItemProperties(model,id,false);
-
+      output.innerHTML= props.Name.value;
       console.log(id, props);
     }
   }
