@@ -24,9 +24,13 @@ html, body {
   z-index: 1;
   position: absolute;
   margin: 16px;
-  background-color: rgba(255,255,255,0.8);
+  background-color: rgba(0,0,255,0.8);
   display: inline-block;
   padding: 10px;
+  overflow: autos;
+  width: 15vw;
+  height: 60vh;
+
 }
 
 .message {

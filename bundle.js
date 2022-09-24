@@ -104472,3 +104472,53 @@ const output = document.getElementById("id-output");
     }
   }
   threeCanvas.ondblclick = pick;
+  
+// Creates subset material
+const preselectMat = new MeshLambertMaterial({
+    transparent: true,
+    opacity: 0.6,
+    color: 0xff88ff,
+    depthTest: false,
+  });
+  const ifc = ifcLoader.ifcManager;
+
+// Reference to the previous selection
+let preselectModel = { id: -1 };
+  
+function highlight(event, material, model) {
+const found = cast(event)[0];
+
+if (found) {
+    // Gets model ID
+    model.id = found.object.modelID;
+
+    // Gets Express ID
+    const index = found.faceIndex;
+    const geometry = found.object.geometry;
+    const id = ifc.getExpressId(geometry, index);
+
+    // Creates subset
+    ifcLoader.ifcManager.createSubset({
+    modelID: model.id,
+    ids: [id],
+    material: material,
+    scene: scene,
+    removePrevious: true,
+    });
+} else {
+    // Removes previous highlight
+    ifc.removeSubset(model.id, material);
+}
+}
+
+window.onmousemove = (event) => highlight(event, preselectMat, preselectModel);
+
+const selectMat = new MeshLambertMaterial({
+    transparent: true,
+    opacity: 0.6,
+    color: 0xff00ff,
+    depthTest: false,
+  });
+  
+const selectModel = { id: -1 };
+window.ondblclick = (event) => highlight(event, selectMat, selectModel);
